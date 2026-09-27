@@ -1,14 +1,13 @@
-import React from "react";
-import { useEffect } from "react";
+import React, { useEffect } from "react";
+import { useLocation } from "react-router-dom";
+import { trackEvent } from "../lib/analytics";
 
-export default function TrackPageView({ page }) {
+export default function TrackPageView() {
+  const location = useLocation();
+
   useEffect(() => {
-    const api = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-    fetch(`${api}/analytics/event`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "page_view", page })
-    }).catch(() => {});
-  }, [page]);
+    trackEvent("page_view", location.pathname);
+  }, [location.pathname]);
+
   return null;
 }

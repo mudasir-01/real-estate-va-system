@@ -22,8 +22,7 @@ function mapOrder(order) {
     service: order.service,
     quantity: order.quantity,
     estimatedPrice: order.estimated_price,
-    additionalRequirements:
-      order.additional_requirements,
+    additionalRequirements: order.additional_requirements,
     paymentStatus: order.payment_status,
     status: order.status,
     notes: order.notes,
@@ -50,69 +49,68 @@ router.get("/orders", async (req, res) => {
   }
 });
 
-router.patch(
-  "/orders/:id/status",
-  async (req, res) => {
-    try {
-      const { status } = req.body;
+router.patch("/orders/:id/status", async (req, res) => {
+  try {
+    const { status } = req.body;
 
-      const allowed = [
-        "New Order",
-        "Client Discussion",
-        "Payment Pending",
-        "Paid",
-        "In Progress",
-        "Delivered",
-        "Completed",
-        "Follow-Up",
-        "Cancelled",
-      ];
+    const allowed = [
+      "New Order",
+      "Client Discussion",
+      "Payment Pending",
+      "Paid",
+      "In Progress",
+      "Delivered",
+      "Completed",
+      "Follow-Up",
+      "Cancelled",
+    ];
 
-      if (!allowed.includes(status)) {
-        return res.status(400).json({
-          message: "Invalid status",
-        });
-      }
-
-      const { data, error } = await supabase
-        .from("orders")
-        .update({ status })
-        .eq("id", req.params.id)
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      res.json(mapOrder(data));
-    } catch (error) {
-      res.status(500).json({
-        message: error.message,
+    if (!allowed.includes(status)) {
+      return res.status(400).json({
+        message: "Invalid status",
       });
     }
+
+    const { data, error } = await supabase
+      .from("orders")
+      .update({ status })
+      .eq("id", req.params.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    res.json(mapOrder(data));
+  } catch (error) {
+    res.status(500).json({
+      message: error.message,
+    });
   }
-);
+});
 
 router.get("/stats", async (req, res) => {
   try {
+    // Start of today
     const start = new Date();
     start.setHours(0, 0, 0, 0);
 
     const startISO = start.toISOString();
 
     const [
-      pageViews,
-      whatsappClicks,
+      pageViewsResult,
+      whatsappClicksResult,
       ordersResult,
     ] = await Promise.all([
+      // Get today's page views + visitor IDs
       supabase
         .from("analytics_events")
-        .select("id", {
+        .select("id, visitor_id", {
           count: "exact",
-          head: true,
         })
         .eq("type", "page_view")
         .gte("created_at", startISO),
 
+      // Count today's WhatsApp clicks
       supabase
         .from("analytics_events")
         .select("id", {
@@ -122,53 +120,102 @@ router.get("/stats", async (req, res) => {
         .eq("type", "whatsapp_click")
         .gte("created_at", startISO),
 
+      // Get orders
       supabase
         .from("orders")
-        .select(
-          "id,status,estimated_price"
-        ),
+        .select("id,status,estimated_price"),
     ]);
+
+    if (pageViewsResult.error) {
+      throw pageViewsResult.error;
+    }
+
+    if (whatsappClicksResult.error) {
+      throw whatsappClicksResult.error;
+    }
 
     if (ordersResult.error) {
       throw ordersResult.error;
     }
 
-    const orders = ordersResult.data || [];
+    // ------------------------------
+    // REAL UNIQUE VISITORS
+    // ------------------------------
+
+    const pageViewEvents =
+      pageViewsResult.data || [];
+
+    const uniqueVisitorIds = new Set(
+      pageViewEvents
+        .map((event) => event.visitor_id)
+        .filter(
+          (visitorId) =>
+            visitorId &&
+            visitorId.trim() !== ""
+        )
+    );
+
+    const visitorsToday =
+      uniqueVisitorIds.size;
+
+    const pageViewsToday =
+      pageViewsResult.count || 0;
+
+    const whatsappClicksToday =
+      whatsappClicksResult.count || 0;
+
+    // ------------------------------
+    // ORDER STATS
+    // ------------------------------
+
+    const orders =
+      ordersResult.data || [];
 
     const newOrders = orders.filter(
-      (o) => o.status === "New Order"
+      (order) =>
+        order.status === "New Order"
     ).length;
 
-    const pendingOrders = orders.filter((o) =>
-      [
-        "New Order",
-        "Client Discussion",
-        "Payment Pending",
-        "Follow-Up",
-      ].includes(o.status)
-    ).length;
+    const pendingOrders =
+      orders.filter((order) =>
+        [
+          "New Order",
+          "Client Discussion",
+          "Payment Pending",
+          "Follow-Up",
+        ].includes(order.status)
+      ).length;
 
-    const completedOrders = orders.filter(
-      (o) => o.status === "Completed"
-    ).length;
+    const completedOrders =
+      orders.filter(
+        (order) =>
+          order.status === "Completed"
+      ).length;
 
-    const activeOrders = orders.filter(
-      (o) => o.status !== "Cancelled"
-    );
+    const activeOrders =
+      orders.filter(
+        (order) =>
+          order.status !== "Cancelled"
+      );
 
     const estimatedOrderValue =
       activeOrders.reduce(
         (total, order) =>
           total +
-          Number(order.estimated_price || 0),
+          Number(
+            order.estimated_price || 0
+          ),
         0
       );
 
+    // ------------------------------
+    // SEND REAL STATS
+    // ------------------------------
+
     res.json({
-      visitorsToday: pageViews.count || 0,
-      pageViewsToday: pageViews.count || 0,
-      whatsappClicksToday:
-        whatsappClicks.count || 0,
+      visitorsToday,
+      pageViewsToday,
+      whatsappClicksToday,
       newOrders,
       pendingOrders,
       completedOrders,
@@ -176,7 +223,10 @@ router.get("/stats", async (req, res) => {
       estimatedOrderValue,
     });
   } catch (error) {
-    console.error("Stats error:", error);
+    console.error(
+      "Stats error:",
+      error
+    );
 
     res.status(500).json({
       message: error.message,

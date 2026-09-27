@@ -14,6 +14,7 @@ router.post("/event", async (req, res) => {
 
     if (!type) {
       return res.status(400).json({
+        ok: false,
         message: "type is required",
       });
     }
@@ -30,17 +31,24 @@ router.post("/event", async (req, res) => {
       ]);
 
     if (error) {
-      console.error("Analytics error:", error);
+      console.error("Analytics insert error:", error);
+
+      return res.status(500).json({
+        ok: false,
+        message: "Analytics event could not be saved",
+      });
     }
 
-    res.status(201).json({
+    return res.status(201).json({
       ok: true,
     });
-  } catch (error) {
-    console.error(error);
 
-    res.status(201).json({
-      ok: true,
+  } catch (error) {
+    console.error("Analytics route error:", error);
+
+    return res.status(500).json({
+      ok: false,
+      message: "Internal server error",
     });
   }
 });
