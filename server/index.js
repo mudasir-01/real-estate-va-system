@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import orderRoutes from "./routes/orders.js";
 import analyticsRoutes from "./routes/analytics.js";
 import adminRoutes from "./routes/admin.js";
+import whatsappRoutes from "./routes/whatsapp.js";
 
 dotenv.config();
 
@@ -14,7 +15,9 @@ const port = process.env.PORT || 5000;
 
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    origin:
+      process.env.CLIENT_URL ||
+      "http://localhost:5173",
   })
 );
 
@@ -30,8 +33,11 @@ app.get("/api/health", (req, res) => {
 app.use("/api/orders", orderRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/whatsapp", whatsappRoutes);
 
 app.listen(port, () => {
-  console.log(`API running on http://localhost:${port}`);
+  console.log(
+    `API running on http://localhost:${port}`
+  );
   console.log("Database: Supabase");
 });
